@@ -1,0 +1,6 @@
+
+{
+  "name": "NEXUS Prime | Future of Finance",
+  "description": "A hyper-animated, high-conversion Fintech landing page with real-time AI wealth strategy and immersive 3D-effect UI components.",
+  "requestFramePermissions": ["camera", "microphone"]
+}
