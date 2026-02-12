@@ -1,11 +1,4 @@
 // api/chat.ts — Vercel Serverless Function (TypeScript)
-// Endpoint: POST /api/chat
-// Body: { message: string, history?: Array<{role:"user"|"assistant", text?:string, content?:string}> }
-//
-// Required env on Vercel (Production + Preview):
-//   GEMINI_API_KEY
-// Optional:
-//   GEMINI_MODEL (default: gemini-3-flash-preview)
 
 type Role = "user" | "assistant";
 
@@ -20,7 +13,7 @@ type ChatBody = {
   history?: HistoryItem[];
 };
 
-const BUILD_ID = "nexus-chat-ts-v2";
+const BUILD_ID = "nexus-chat-ts-v3";
 
 const s = (v: unknown) => (typeof v === "string" ? v.trim() : "");
 
@@ -79,7 +72,8 @@ export default async function handler(req: any, res: any) {
     }
 
     const apiKey = process.env.GEMINI_API_KEY as string | undefined;
-    const model = (process.env.GEMINI_MODEL as string | undefined) || "gemini-3-flash-preview";
+    const model =
+      (process.env.GEMINI_MODEL as string | undefined) || "gemini-3-flash-preview";
 
     if (!apiKey) {
       return res.status(500).json({ build: BUILD_ID, error: "Missing GEMINI_API_KEY" });
