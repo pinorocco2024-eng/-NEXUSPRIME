@@ -21,3 +21,14 @@ export interface AIWealthStrategy {
   allocation: { asset: string; percentage: number }[];
   summary: string;
 }
+
+export type WorkflowPlan = {
+  name: string;
+  steps: Array<{
+    id: string;
+    title: string;
+    description: string;
+    type: "trigger" | "action" | "condition";
+  }>;
+  outcome: string;
+};

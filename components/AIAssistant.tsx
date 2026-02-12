@@ -1,18 +1,12 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { MessageCircle, X, Send, Loader2, TrendingUp, Search } from "lucide-react";
-import { GoogleGenAI } from "@google/genai";
 
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   sources?: any[];
 };
-
-const SYSTEM_PROMPT = `You are NEXUS Intelligence, the official AI support for NEXUS Prime Capital Partners.
-You provide high-level financial insights and site assistance.
-If the user asks for real-time market prices, you may use Google Search grounding where available.
-Be concise, professional, and helpful.`;
 
 const AIAssistant: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -27,7 +21,6 @@ const AIAssistant: React.FC = () => {
   const [isTyping, setIsTyping] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll on new messages
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -38,52 +31,42 @@ const AIAssistant: React.FC = () => {
     const userMsg = input.trim();
     if (!userMsg || isTyping) return;
 
+    // optimistic UI
     setInput("");
     setMessages((prev) => [...prev, { role: "user", content: userMsg }]);
     setIsTyping(true);
 
     try {
-      // ✅ Vite env var (must be prefixed with VITE_)
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
-      if (!apiKey) {
-        throw new Error(
-          "Missing VITE_GEMINI_API_KEY. Add it to your .env and restart the dev server."
-        );
-      }
-
-      const ai = new GoogleGenAI({ apiKey });
-
-      // Optional: keep a short chat history context (last N messages)
-      const lastTurns = messages.slice(-8).map((m) => `${m.role.toUpperCase()}: ${m.content}`).join("\n");
-      const prompt = `${SYSTEM_PROMPT}\n\nConversation so far:\n${lastTurns}\n\nUSER: ${userMsg}\nASSISTANT:`;
-
-      const response = await ai.models.generateContent({
-        // ⚠️ If this model fails for you, try: "gemini-2.0-flash" or "gemini-1.5-flash"
-        model: "gemini-3-pro-preview",
-        contents: prompt,
-        config: {
-          tools: [{ googleSearch: {} }],
-        },
+      const resp = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: userMsg,
+          history: messages, // send last turns for context
+        }),
       });
 
-      // SDK responses can vary by version — these fallbacks prevent UI breakage
-      const text =
-        (response as any)?.text ||
-        (response as any)?.response?.text?.() ||
-        "I apologize, my neural link is temporarily disrupted.";
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        throw new Error(data?.error || `Request failed (${resp.status})`);
+      }
 
-      const sources =
-        (response as any)?.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+      const text =
+        typeof data?.text === "string" && data.text.trim().length > 0
+          ? data.text
+          : "I apologize, my neural link is temporarily disrupted.";
+
+      const sources = Array.isArray(data?.sources) ? data.sources : [];
 
       setMessages((prev) => [...prev, { role: "assistant", content: text, sources }]);
-    } catch (error) {
+    } catch (error: any) {
       console.error("AI Assistant Error:", error);
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
           content:
-            "I couldn't reach the AI service. Please check configuration and try again.",
+            "Network error. Please try again later. (If you're running locally with Vite, start with `vercel dev` to enable /api routes.)",
         },
       ]);
     } finally {
