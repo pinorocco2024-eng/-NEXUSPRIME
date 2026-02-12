@@ -1,18 +1,26 @@
 // api/chat.ts — Vercel Serverless Function (TypeScript)
+// Endpoint: POST /api/chat
+// Body: { message: string, history?: Array<{role:"user"|"assistant", text?:string, content?:string}> }
+//
 // Required env on Vercel (Production + Preview):
 //   GEMINI_API_KEY
 // Optional:
 //   GEMINI_MODEL (default: gemini-3-flash-preview)
 
 type Role = "user" | "assistant";
-type HistoryItem = { role: Role; text?: string; content?: string };
+
+type HistoryItem = {
+  role: Role;
+  text?: string;
+  content?: string;
+};
 
 type ChatBody = {
   message?: string;
   history?: HistoryItem[];
 };
 
-const BUILD_ID = "nexus-chat-ts-v1";
+const BUILD_ID = "nexus-chat-ts-v2";
 
 const s = (v: unknown) => (typeof v === "string" ? v.trim() : "");
 
@@ -29,13 +37,13 @@ function buildContents(systemText: string, history: unknown, userMessage: string
       return { role, text };
     })
     .filter(Boolean)
-    .slice(-12);
+    .slice(-12) as Array<{ role: Role; text: string }>;
 
   return [
     { role: "user", parts: [{ text: systemText }] },
     ...normalized.map((m) => ({
-      role: m!.role === "assistant" ? "model" : "user",
-      parts: [{ text: m!.text }],
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: m.text }],
     })),
     { role: "user", parts: [{ text: userMessage }] },
   ];
@@ -51,12 +59,13 @@ function extractText(data: any): string {
 }
 
 export default async function handler(req: any, res: any) {
-  // CORS (ok anche se lo chiami same-origin)
+  // CORS (ok anche same-origin)
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
   if (req.method === "OPTIONS") return res.status(204).end();
+
   if (req.method !== "POST") {
     return res.status(405).json({ build: BUILD_ID, error: "Method not allowed" });
   }
