@@ -329,7 +329,7 @@ export default function AIAssistant() {
               </div>
 
               <p className="mt-3 text-[10px] text-slate-600 leading-relaxed">
-                Rispondo sempre in italiano. Se la quota è piena o il servizio è
+                Rispondo sempre. Se la quota è piena o il servizio è
                 occupato, riprova tra qualche secondo.
               </p>
             </div>
