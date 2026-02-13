@@ -1,78 +1,101 @@
 import React, { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { MessageCircle, X, Send, Loader2, TrendingUp, Search } from "lucide-react";
+import { MessageCircle, X, Send, Sparkles, ExternalLink } from "lucide-react";
 
-type ChatMessage = {
-  role: "user" | "assistant";
-  content: string;
-  sources?: any[];
+type Role = "user" | "assistant";
+
+type Source = {
+  web?: { uri?: string; title?: string };
 };
 
-const AIAssistant: React.FC = () => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([
+type Message = {
+  role: Role;
+  content: string;
+  sources?: Source[];
+};
+
+export default function AIAssistant() {
+  const [open, setOpen] = useState(false);
+  const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
       content:
-        "Hello. I am NEXUS Intelligence. Ask me about market prices, our ecosystem, or current financial trends.",
+        "Ciao! Sono NEXUS Intelligence. Posso aiutarti a capire i servizi, l’ecosistema e rispondere alle tue domande.",
     },
   ]);
   const [input, setInput] = useState("");
-  const [isTyping, setIsTyping] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [busy, setBusy] = useState(false);
+
+  const scrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages, isTyping]);
+    if (!scrollRef.current) return;
+    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [messages, busy, open]);
 
-  const handleSend = async () => {
-    const userMsg = input.trim();
-    if (!userMsg || isTyping) return;
-
-    // optimistic UI
-    setInput("");
-    setMessages((prev) => [...prev, { role: "user", content: userMsg }]);
-    setIsTyping(true);
+  async function postChat(userMessage: string, history: Message[]) {
+    let res: Response;
 
     try {
-      const resp = await fetch("/api/chat", {
+      res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: userMsg,
-          history: messages, // send last turns for context
-        }),
+        // il backend accetta { message, history }
+        body: JSON.stringify({ message: userMessage, history }),
       });
+    } catch {
+      throw new Error("Errore di rete. Controlla la connessione e riprova tra poco.");
+    }
 
-      const data = await resp.json().catch(() => ({}));
-      if (!resp.ok) {
-        throw new Error(data?.error || `Request failed (${resp.status})`);
-      }
+    const data = await res.json().catch(() => ({}));
 
-      const text =
-        typeof data?.text === "string" && data.text.trim().length > 0
-          ? data.text
-          : "I apologize, my neural link is temporarily disrupted.";
+    if (!res.ok) {
+      // mostra l’errore vero dal server (es. quota/rate limit Gemini)
+      throw new Error(data?.error || `Errore server (HTTP ${res.status}). Riprova tra poco.`);
+    }
 
-      const sources = Array.isArray(data?.sources) ? data.sources : [];
+    const text =
+      typeof data?.text === "string" && data.text.trim().length > 0
+        ? data.text
+        : "Mi dispiace, non riesco a rispondere in questo momento.";
+
+    const sources: Source[] = Array.isArray(data?.sources) ? data.sources : [];
+    return { text, sources };
+  }
+
+  async function send() {
+    const userText = input.trim();
+    if (!userText || busy) return;
+
+    setInput("");
+    setBusy(true);
+
+    // aggiungi subito il messaggio user
+    setMessages((prev) => [...prev, { role: "user", content: userText }]);
+
+    // snapshot history coerente (include il messaggio appena mandato)
+    const historySnapshot: Message[] = [...messages, { role: "user", content: userText }];
+
+    try {
+      const { text, sources } = await postChat(userText, historySnapshot);
 
       setMessages((prev) => [...prev, { role: "assistant", content: text, sources }]);
-    } catch (error: any) {
-      console.error("AI Assistant Error:", error);
+    } catch (err: any) {
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content:
-            "Network error. Please try again later. (If you're running locally with Vite, start with `vercel dev` to enable /api routes.)",
+          content: `⚠️ ${err?.message || "Errore. Riprova tra poco."}`,
         },
       ]);
     } finally {
-      setIsTyping(false);
+      setBusy(false);
     }
-  };
+  }
+
+  function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") send();
+  }
 
   return (
     <>
@@ -81,21 +104,22 @@ const AIAssistant: React.FC = () => {
         <motion.button
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
-          onClick={() => setIsOpen((v) => !v)}
+          onClick={() => setOpen((v) => !v)}
           className="w-16 h-16 bg-cyan-500 rounded-full shadow-2xl flex items-center justify-center text-black border-4 border-black group"
-          aria-label={isOpen ? "Close assistant" : "Open assistant"}
+          aria-label={open ? "Chiudi assistente" : "Apri assistente"}
+          type="button"
         >
-          {isOpen ? (
-            <X size={24} />
+          {open ? (
+            <X className="w-6 h-6" />
           ) : (
-            <MessageCircle size={28} className="group-hover:rotate-12 transition-transform" />
+            <MessageCircle className="w-7 h-7 group-hover:rotate-12 transition-transform" />
           )}
         </motion.button>
       </div>
 
       {/* Chat window */}
       <AnimatePresence>
-        {isOpen && (
+        {open && (
           <motion.div
             initial={{ opacity: 0, y: 100, scale: 0.8 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -106,7 +130,7 @@ const AIAssistant: React.FC = () => {
             <div className="p-8 border-b border-white/5 flex items-center justify-between bg-white/5">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-cyan-500/20 rounded-xl flex items-center justify-center text-cyan-400">
-                  <TrendingUp size={20} />
+                  <Sparkles size={20} />
                 </div>
                 <div>
                   <h3 className="font-black text-sm uppercase tracking-widest">Nexus Intel</h3>
@@ -118,9 +142,10 @@ const AIAssistant: React.FC = () => {
               </div>
 
               <button
-                onClick={() => setIsOpen(false)}
+                onClick={() => setOpen(false)}
                 className="text-slate-400 hover:text-white transition-colors"
-                aria-label="Close"
+                aria-label="Chiudi"
+                type="button"
               >
                 <X size={18} />
               </button>
@@ -128,8 +153,11 @@ const AIAssistant: React.FC = () => {
 
             {/* Messages */}
             <div ref={scrollRef} className="flex-1 overflow-y-auto p-8 space-y-6 scrollbar-hide">
-              {messages.map((m, i) => (
-                <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+              {messages.map((m, idx) => (
+                <div
+                  key={idx}
+                  className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
+                >
                   <div
                     className={`max-w-[85%] p-5 rounded-3xl ${
                       m.role === "user"
@@ -142,20 +170,25 @@ const AIAssistant: React.FC = () => {
                     {m.sources && m.sources.length > 0 && (
                       <div className="mt-4 pt-4 border-t border-white/10">
                         <p className="text-[10px] font-bold text-cyan-400 mb-2 flex items-center gap-1">
-                          <Search size={10} /> GROUNDED SOURCES
+                          <ExternalLink size={10} /> SOURCES
                         </p>
                         <div className="flex flex-wrap gap-2">
-                          {m.sources.slice(0, 3).map((s: any, si: number) => (
-                            <a
-                              key={si}
-                              href={s?.web?.uri || "#"}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-[10px] bg-black/40 px-2 py-1 rounded-md text-slate-500 hover:text-white"
-                            >
-                              {(s?.web?.title?.substring(0, 18) || "Source") + "..."}
-                            </a>
-                          ))}
+                          {m.sources.slice(0, 3).map((s, i) => {
+                            const uri = s?.web?.uri;
+                            const title = s?.web?.title || "Source";
+                            if (!uri) return null;
+                            return (
+                              <a
+                                key={i}
+                                href={uri}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-[10px] bg-black/40 px-2 py-1 rounded-md text-slate-500 hover:text-white"
+                              >
+                                {title.length > 18 ? `${title.slice(0, 18)}...` : title}
+                              </a>
+                            );
+                          })}
                         </div>
                       </div>
                     )}
@@ -163,10 +196,14 @@ const AIAssistant: React.FC = () => {
                 </div>
               ))}
 
-              {isTyping && (
+              {busy && (
                 <div className="flex justify-start">
                   <div className="bg-white/5 p-5 rounded-3xl border border-white/5">
-                    <Loader2 className="animate-spin text-cyan-500" size={18} />
+                    <div className="flex gap-2 items-center text-cyan-400 text-sm">
+                      <span className="w-2 h-2 rounded-full bg-cyan-500 animate-bounce" />
+                      <span className="w-2 h-2 rounded-full bg-cyan-500 animate-bounce [animation-delay:150ms]" />
+                      <span className="w-2 h-2 rounded-full bg-cyan-500 animate-bounce [animation-delay:300ms]" />
+                    </div>
                   </div>
                 </div>
               )}
@@ -179,27 +216,28 @@ const AIAssistant: React.FC = () => {
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleSend();
-                  }}
-                  placeholder="Ask about markets..."
-                  className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 pr-16 outline-none focus:border-cyan-500 transition-all text-sm"
+                  onKeyDown={onKeyDown}
+                  placeholder="Scrivi qui..."
+                  className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 pr-16 outline-none focus:border-cyan-500 transition-all text-sm text-slate-200"
+                  disabled={busy}
                 />
                 <button
-                  onClick={handleSend}
-                  disabled={isTyping || !input.trim()}
+                  onClick={send}
+                  disabled={busy || !input.trim()}
                   className="absolute right-2 p-3 bg-cyan-500 rounded-xl text-black hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100"
-                  aria-label="Send"
+                  aria-label="Invia"
+                  type="button"
                 >
                   <Send size={18} />
                 </button>
               </div>
+              <p className="mt-3 text-[10px] text-slate-600 leading-relaxed">
+                Rispondo sempre. Se il servizio è occupato potresti vedere un messaggio di attesa: riprova tra qualche secondo.
+              </p>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
     </>
   );
-};
-
-export default AIAssistant;
+}

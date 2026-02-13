@@ -80,7 +80,7 @@ export default async function handler(req: any, res: any) {
     }
 
     const SYSTEM_TEXT =
-      "Rispondi SEMPRE e SOLO in italiano. " +
+      "Rispondi sempre nella lingua in cui ti scrivono il primo messaggio. " +
       "Sei l'assistente virtuale del sito NEXUS Prime. " +
       "Tono: amichevole e professionale. " +
       "Se mancano dettagli, fai UNA domanda alla volta. " +
